@@ -20,7 +20,7 @@ for i in range(input.getNumSegments()):
     
     frames_text.append([frames, text]) # add frames and text
 
-anim = animation.ArtistAnimation(fig, frames_text, interval=500, blit=True)#, repeat_delay=1000) #interval in millisec
+anim = animation.ArtistAnimation(fig, frames_text, interval=500, blit=True, repeat_delay=1000) #interval in millisec
 
 #fig = plt.figure()
 #for i in range(input.getNumSegments()):
