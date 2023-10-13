@@ -12,7 +12,7 @@ tree = MDSplus.Tree('basler', shot_number)
 
 input = tree.ACA800.FRAMES
 images = [ input.getSegment(i).data() for i in range(input.getNumSegments()) ]
-print(f"Number of frames = {len(images)}, Running time = {tree.RUNNING_TIME.data()}")
+print(f"Number of frames = {len(images)}, Running time = {tree.ACA800.RUNNING_TIME.data()}")
 
 #frames = []
 #fig = plt.figure("Animation")
