@@ -248,7 +248,21 @@ class ACA800(MDSplus.Device):
                 frame_index = 0
                 while self.device.RUNNING.on and frame_index < self.frames_to_grab:
                     try:
+                        # Parameters for cam.RetrieveResult():
+                        # timeoutMs - A timeout value in ms for waiting for a grab result, or INFINITE (inf) value.
+                        # grabResult - Receives the grab result.
+                        # timeoutHandling - If timeoutHandling equals TimeoutHandling_ThrowException, a timeout exception is thrown on timeout.
+                        
+                        # In pypylon could the following values for infinite:
+                        # >>> import pypylon.pylon as py
+                        # >>> py.waitForever
+                        # 4294967295
+                        # >>> hex(py.waitForever)
+                        # '0xffffffff'
+                        # >>>
+                        
                         grabResults = self.cam.RetrieveResult(1000, pylon.TimeoutHandling_ThrowException)
+                        print(frame_index)
                     except:
                         self.frame_queue.put(None) # signal the end of data acquisition
                         break
