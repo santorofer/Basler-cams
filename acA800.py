@@ -177,12 +177,12 @@ class ACA800(MDSplus.Device):
                 frame_index = 0
                 while True:
                     try:
-                        data = self.reader.frame_queue.get(block=True, timeout=1)
+                        result = self.reader.frame_queue.get(block=True, timeout=1)
                     except queue.Empty:
                         continue
 
                     # A buffer of None signals the end to streaming
-                    if data is None:
+                    if result is None:
                         break
 
                     benchmark_start = time.time()
@@ -191,8 +191,9 @@ class ACA800(MDSplus.Device):
                     end = begin + delta_time
                     dim = MDSplus.Range(begin, end, delta_time)
 
-                    input_node.makeSegment(begin, end, dim, data)
-
+                    input_node.makeSegment(begin, end, dim, result.Array)
+                    result.Release()
+                    
                     benchmark_end = time.time()
                     benchmark_elapsed = benchmark_end - benchmark_start
 
@@ -217,6 +218,7 @@ class ACA800(MDSplus.Device):
         def run(self):
             try:
                 import pypylon.pylon as pylon
+                from datetime import datetime, timezone
             
                 self.tree = MDSplus.Tree(self.tree_name, self.tree_shot)
                 self.device = self.tree.getNode(self.node_path)
@@ -235,16 +237,22 @@ class ACA800(MDSplus.Device):
                 self.device._log_info(f"Using device {self.cam.GetDeviceInfo().GetModelName()}")
                       
                 #Set the FPS
+                self.cam.AcquisitionFrameRateEnable.SetValue(True)
                 self.cam.AcquisitionFrameRateAbs.SetValue(float(self.device.FPS.data()))
+                self.cam.MaxNumBuffer = 1900
+                self.cam.OutputQueueSize = 1900
 
-                self.writer = self.device.StreamWriter(self)
-                self.writer.setDaemon(True)
-                self.writer.start()
+
+                #self.writer = self.device.StreamWriter(self)
+                #self.writer.setDaemon(True)
+                #self.writer.start()
 
                 self.device._log_info(f"Recording {self.time_to_record} second video at {self.device.FPS.data()} fps. Max #Images = {self.frames_to_grab}")
                                       
-                self.cam.StartGrabbingMax(self.frames_to_grab, pylon.GrabStrategy_OneByOne)
+                #self.cam.StartGrabbingMax(self.frames_to_grab, pylon.GrabStrategy_OneByOne)
+                self.cam.StartGrabbing(pylon.GrabStrategy_UpcomingImage)
                 
+                last_frame_id = 0
                 frame_index = 0
                 while self.device.RUNNING.on and frame_index < self.frames_to_grab:
                     try:
@@ -261,21 +269,29 @@ class ACA800(MDSplus.Device):
                         # '0xffffffff'
                         # >>>
                         
-                        grabResults = self.cam.RetrieveResult(1000, pylon.TimeoutHandling_ThrowException)
-                        print(frame_index)
-                    except:
+                        grabResult = self.cam.RetrieveResult(1000, pylon.TimeoutHandling_ThrowException)
+                    except e:
+                        print(e)
                         self.frame_queue.put(None) # signal the end of data acquisition
                         break
                     
-                    if not grabResults:
+                    if not grabResult:
                         continue
                     
-                    if not grabResults.GrabSucceeded():
-                        self.frame_queue.put(None) # signal the end of data acquisition
-                        break
-                    
-                    frame_index += 1
-                    self.frame_queue.put(grabResults.Array)
+                    if grabResult.GrabSucceeded():
+                        frame_index += 1
+                        
+                        missed_frames = grabResult.GetID() - last_frame_id - 1
+                        last_frame_id = grabResult.GetID()
+                        
+                        if missed_frames > 0:
+                            print("Missed", missed_frames, "frames.")
+                        
+                        timestamp = datetime.fromtimestamp(grabResult.GetTimeStamp() / float(1e9), timezone.utc)
+
+                        print("Timestamp", timestamp)
+                        
+                        self.frame_queue.put(grabResult)                        
                             
                 # else:
                 #     pass
@@ -287,6 +303,11 @@ class ACA800(MDSplus.Device):
 
             # This will signal the StreamWriter that no more buffers will be coming
             self.frame_queue.put(None)
+            
+            self.writer = self.device.StreamWriter(self)
+            self.writer.setDaemon(True)
+            self.writer.start()
+            
             self.device.RUNNING.on = False
             self.cam.StopGrabbing()
             self.cam.Close()
