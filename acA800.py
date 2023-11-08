@@ -126,6 +126,15 @@ class ACA800(MDSplus.Device):
             # },
         },
         {
+            'path': ':TRIGGER:IN_MESSAGE',
+            'type': 'numeric',
+            'value': 0,
+            'options': ('write_shot',),
+            # 'ext_options': {
+            #     'tooltip': 'Trigger incoming message. These options will contain the trigger timestamp, use to trigger the camera',
+            # },
+        },
+        {
             'path': ':INIT_ACTION',
             'type': 'action',
             'valueExpr': "Action(Dispatch('MDSIP_SERVER','INIT',50,None),Method(None,'INIT',head,'auto'))",
@@ -239,9 +248,22 @@ class ACA800(MDSplus.Device):
                 #Set the FPS
                 self.cam.AcquisitionFrameRateEnable.SetValue(True)
                 self.cam.AcquisitionFrameRateAbs.SetValue(float(self.device.FPS.data()))
+                
                 self.cam.MaxNumBuffer = 1900
                 self.cam.OutputQueueSize = 1900
 
+                # Software Triggering
+                # Image acquisition starts whenever a software command is received: self.cam.ExecuteSoftwareTrigger()
+                self.cam.TriggerSelector.SetValue('FrameStart')
+                #self.cam.TriggerSelector.SetValue('FrameBurstStart')
+                self.cam.TriggerSource.SetValue('Software')
+                self.cam.TriggerMode.SetValue('On')
+                
+                # Triggering a Series of Images
+                # Whenever a rising signal on physical input line 1 is received, the camera automatically acquires a complete series of 3 images.
+                # self.cam.AcquisitionBurstFrameCount = 3
+                # self.cam.TriggerActivation.SetValue('RisingEdge')
+                # self.cam.TriggerSource.SetValue('Line1')
 
                 #self.writer = self.device.StreamWriter(self)
                 #self.writer.setDaemon(True)
@@ -251,6 +273,8 @@ class ACA800(MDSplus.Device):
                                       
                 #self.cam.StartGrabbingMax(self.frames_to_grab, pylon.GrabStrategy_OneByOne)
                 self.cam.StartGrabbing(pylon.GrabStrategy_UpcomingImage)
+                #self.cam.StartGrabbing()
+
                 
                 last_frame_id = 0
                 frame_index = 0
