@@ -68,6 +68,9 @@ start_time = datetime.now() + timedelta(seconds=DELAY)
 frame_counts = [0]*NUM_CAMERAS
 frames_by_camera = [[]]*NUM_CAMERAS
 
+time_list_0 = []
+time_list_1 = []
+
 while True:    
     try:
         with cam_array.RetrieveResult(1000, pylon.TimeoutHandling_ThrowException) as res:
@@ -79,6 +82,12 @@ while True:
                 #print(f"cam #{cam_id}  image #{img_nr}")
                 
                 frames_by_camera[cam_id].append(res.Array.copy())
+                
+                time_stamp = res.TimeStamp
+                if cam_id == 0:
+                    time_list_0.append(time_stamp/1e9)
+                else:
+                    time_list_1.append(time_stamp/1e9)
                 
                 # check if all cameras have reached x images
                 if min(frame_counts) >= IMAGES_TO_GRAB:
@@ -107,4 +116,21 @@ for cam_id, frames in enumerate(frames_by_camera):
 
 stop_time = datetime.now()
 print('Done writing, took', stop_time - start_time)
+
+print('Time stamps comparasion')
+
+figure, axis = plt.subplots(2, 2) 
+
+axis[0,0].plot(time_list_0, 'o', color='r', label='cam 0')
+axis[0,0].plot(time_list_1, 'x', color='b', label='cam 1')
+axis[0,0].set(ylabel='Unix Timestamps per frame [sec]')
+
+diff = np.subtract(time_list_1, time_list_0) * 1e3
+#print(f'Camera 0 timestamp {time_list_0} sec. Difference {diff} msec per frame')
+
+axis[0,1].plot(diff, 'x', color='b', label='cam 1')
+axis[0,1].set(ylabel='Difference between cam0 and cam1 frames [msec]')
+
+print("Comparasion done.")
+plt.show()
 
