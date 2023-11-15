@@ -172,6 +172,36 @@ class ACA800(MDSplus.Device):
     def _init(self):
         pass
 
+    class ListenUDP(threading.Thread):
+        def __init__(self, listener):
+            super(ACA800.ListenUDP, self).__init__(name="ListenUDP")
+            self.listener = listener
+
+        def run(self):
+            import socket
+            try:
+                UDP_IP = "127.0.0.1"
+                UDP_PORT = 5005
+                
+                print(f'In ListenUDP thread')
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+                sock.bind((UDP_IP, UDP_PORT))
+                    
+                while True:
+                    try:
+                        data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
+                        print(f'received message: {data} {addr}')
+                        self.listener.message_queue.put(data) 
+                        break
+                    except Exception as e:
+                        print(e)
+                        self.listener.message_queue.put(None)
+                        break
+  
+            except Exception as e:
+                self.exception = e
+                traceback.print_exc()       
+
     class StreamWriter(threading.Thread):
         def __init__(self, reader):
             super(ACA800.StreamWriter, self).__init__(name="StreamWriter")
@@ -237,17 +267,18 @@ class ACA800(MDSplus.Device):
             try:
                 import pypylon.pylon as pylon
                 from datetime import datetime, timezone
-            
+
                 self.tree = MDSplus.Tree(self.tree_name, self.tree_shot)
                 self.device = self.tree.getNode(self.node_path)
                 
                 self.frame_queue = queue.Queue()
-                
+                self.message_queue = queue.Queue()
+                                
                 self.time_to_record = int(self.device.RUNNING_TIME.data())  # seconds
                 self.frames_to_grab = int(self.device.FPS.data()) * self.time_to_record
-
+                
                 #######################################################################################################################
-                # Setting up and Configuring the camera using its IP address:
+                #Setting up and Configuring the camera using its IP address:
                 ip_address = self.device.ADDRESS.data()
                 info = pylon.DeviceInfo()
                 info.SetPropertyValue('IpAddress', ip_address)
@@ -268,11 +299,13 @@ class ACA800(MDSplus.Device):
                 #Set the FPS
                 self.cam.AcquisitionFrameRateEnable.SetValue(True)
                 self.cam.AcquisitionFrameRateAbs.SetValue(float(self.device.FPS.data()))
-                
-                self.writer = self.device.StreamWriter(self)
-                self.writer.setDaemon(True)
-                self.writer.start()
-                
+
+                self.device._log_info(f'Start ListenUDP tread. Waiting for message...')
+                self.listen = self.device.ListenUDP(self)
+                self.listen.setDaemon(True)
+                self.listen.start()
+                self.listen.join()
+    
                 #Triggering using SyncFreeRun timer: 
                 # https://docs.baslerweb.com/synchronous-free-run#converting-the-64-bit-timestamp-to-start-time-high-and-start-time-low
                 
@@ -280,8 +313,11 @@ class ACA800(MDSplus.Device):
                 currentTimestamp = self.cam.GevTimestampValue()
                 self.device._log_info(f'Current Camera Timestamp is {currentTimestamp}')
                 
-                actionTime = currentTimestamp + int(int(self.device.TRIGGER.IN_MESSAGE.data()) * 1e9)
+                # actionTime = currentTimestamp + int(int(self.device.TRIGGER.IN_MESSAGE.data()) * 1e9)
                 
+                data = self.message_queue.get(block=True, timeout=1)
+                actionTime = currentTimestamp + int(int(data)* 1e9)
+
                 self.cam.SyncFreeRunTimerStartTimeLow = (actionTime & 0x00000000FFFFFFFF)
                 self.cam.SyncFreeRunTimerStartTimeHigh = (actionTime & 0xFFFFFFFF00000000) >> 32
                 
@@ -290,6 +326,10 @@ class ACA800(MDSplus.Device):
 
                 self.device._log_info(f"At {actionTime} (from incoming message), recording {self.time_to_record} second video at {self.device.FPS.data()} fps. Max #Images = {self.frames_to_grab}")
                 #######################################################################################################################
+
+                self.writer = self.device.StreamWriter(self)
+                self.writer.setDaemon(True)
+                self.writer.start()
 
                 self.cam.StartGrabbing()
 
@@ -313,7 +353,7 @@ class ACA800(MDSplus.Device):
                         #grabResult = self.cam.RetrieveResult(10000, pylon.TimeoutHandling_ThrowException)
                         grabResult = self.cam.RetrieveResult(0xFFFFFFFF, pylon.TimeoutHandling_ThrowException)
                         
-                    except e:
+                    except Exception as e:
                         print(e)
                         self.frame_queue.put(None) # signal the end of data acquisition
                         break
@@ -383,9 +423,7 @@ class ACA800(MDSplus.Device):
     ###
 
     def start_stream(self):
-
         self.RUNNING.on = True
-
         thread = self.StreamReader(self)
         thread.start()
         thread.join()
