@@ -131,7 +131,7 @@ class ACA800(MDSplus.Device):
             'value': 'SOFT',
             'options': ('no_write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'Trigger source. These options will decide if the timing highway is d0 or d1. For a soft trigger use STRIG, and for a hard trigger use EXT.',
+            #     'tooltip': 'Trigger source. ',
             # },
         },
         {
@@ -140,7 +140,7 @@ class ACA800(MDSplus.Device):
             'value': 0,
             'options': ('write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'Trigger incoming message. These options will contain the trigger timestamp, use to trigger the camera',
+            #     'tooltip': 'Incoming message us to trigger. These options will contain the trigger timestamp, use to trigger the camera',
             # },
         },
         {
@@ -153,7 +153,7 @@ class ACA800(MDSplus.Device):
             'path': ':STREAM',
             'type': 'any',
             # 'ext_options': {
-            #     'tooltip': 'Contains settings for use with MODE=STREAM.',
+            #     'tooltip': '',
             # },
         },
         {
@@ -183,18 +183,16 @@ class ACA800(MDSplus.Device):
                 UDP_IP = "127.0.0.1"
                 UDP_PORT = 5005
                 
-                print(f'In ListenUDP thread')
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
                 sock.bind((UDP_IP, UDP_PORT))
                     
                 while True:
                     try:
                         data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
-                        print(f'received message: {data} {addr}')
                         self.listener.message_queue.put(data) 
                         break
                     except Exception as e:
-                        print(e)
+                        self.listener._log_info(e)
                         self.listener.message_queue.put(None)
                         break
   
@@ -304,7 +302,7 @@ class ACA800(MDSplus.Device):
                 self.listen = self.device.ListenUDP(self)
                 self.listen.setDaemon(True)
                 self.listen.start()
-                self.listen.join()
+                self.listen.join() # Waiting for network trigger message
     
                 #Triggering using SyncFreeRun timer: 
                 # https://docs.baslerweb.com/synchronous-free-run#converting-the-64-bit-timestamp-to-start-time-high-and-start-time-low
@@ -313,10 +311,13 @@ class ACA800(MDSplus.Device):
                 currentTimestamp = self.cam.GevTimestampValue()
                 self.device._log_info(f'Current Camera Timestamp is {currentTimestamp}')
                 
-                # actionTime = currentTimestamp + int(int(self.device.TRIGGER.IN_MESSAGE.data()) * 1e9)
-                
                 data = self.message_queue.get(block=True, timeout=1)
-                actionTime = currentTimestamp + int(int(data)* 1e9)
+                actionTime = currentTimestamp + int(int(data) * 1e9) # in nanosec
+
+                self.device._log_info(f'Received trigger message, with payload = {int(data)}')
+
+                self.device.TRIGGER.IN_MESSAGE.record= int(data)
+                self.device.TRIGGER.TIMESTAMP.record = MDSplus.Int64(actionTime)
 
                 self.cam.SyncFreeRunTimerStartTimeLow = (actionTime & 0x00000000FFFFFFFF)
                 self.cam.SyncFreeRunTimerStartTimeHigh = (actionTime & 0xFFFFFFFF00000000) >> 32
@@ -324,7 +325,8 @@ class ACA800(MDSplus.Device):
                 self.cam.SyncFreeRunTimerUpdate()
                 self.cam.SyncFreeRunTimerEnable = True
 
-                self.device._log_info(f"At {actionTime} (from incoming message), recording {self.time_to_record} second video at {self.device.FPS.data()} fps. Max #Images = {self.frames_to_grab}")
+                self.device._log_info(
+                    f"At {actionTime} (from incoming message), recording {self.time_to_record} second video at {self.device.FPS.data()} fps. Max #Images = {self.frames_to_grab}")
                 #######################################################################################################################
 
                 self.writer = self.device.StreamWriter(self)
@@ -338,23 +340,15 @@ class ACA800(MDSplus.Device):
                 while self.device.RUNNING.on and frame_index < self.frames_to_grab:
                     try:
                         # Parameters for cam.RetrieveResult():
-                        # timeoutMs - A timeout value in ms for waiting for a grab result, or INFINITE (inf) value.
+                        # timeoutMs - A timeout value in ms for waiting for a grab result, or INFINITE (0xFFFFFFFF) value.
                         # grabResult - Receives the grab result.
                         # timeoutHandling - If timeoutHandling equals TimeoutHandling_ThrowException, a timeout exception is thrown on timeout.
-                        
-                        # In pypylon use the following values for infinite:
-                        # >>> import pypylon.pylon as py
-                        # >>> py.waitForever
-                        # 4294967295
-                        # >>> hex(py.waitForever)
-                        # '0xffffffff'
-                        # >>>
                         
                         #grabResult = self.cam.RetrieveResult(10000, pylon.TimeoutHandling_ThrowException)
                         grabResult = self.cam.RetrieveResult(0xFFFFFFFF, pylon.TimeoutHandling_ThrowException)
                         
                     except Exception as e:
-                        print(e)
+                        self.device._log_info(e)
                         self.frame_queue.put(None) # signal the end of data acquisition
                         break
                     
