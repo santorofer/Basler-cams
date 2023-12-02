@@ -126,19 +126,20 @@ class ACA800(MDSplus.Device):
             # },
         },
         {
-            'path': ':TRIGGER:SOURCE',
-            'type': 'text',
-            'value': 'SOFT',
+            'path': ':TRIGGER:DELAY',
+            'type': 'numeric',
+            'value': 0,
             'options': ('no_write_shot',),
             # 'ext_options': {
             #     'tooltip': 'Trigger source. ',
             # },
         },
         {
-            'path': ':TRIGGER:IN_MESSAGE',
-            'type': 'numeric',
-            'value': 0,
-            'options': ('write_shot',),
+            'path': ':TRIGGER:TRIG_ID',
+            "type": "text",
+            "value": "^START$",
+            "options": ("no_write_shot",),
+            "help": "WRTD ID regex to wait for",
             # 'ext_options': {
             #     'tooltip': 'Incoming message us to trigger. These options will contain the trigger timestamp, use to trigger the camera',
             # },
@@ -172,33 +173,10 @@ class ACA800(MDSplus.Device):
     def _init(self):
         pass
 
-    class ListenUDP(threading.Thread):
-        def __init__(self, listener):
-            super(ACA800.ListenUDP, self).__init__(name="ListenUDP")
-            self.listener = listener
-
-        def run(self):
-            import socket
-            try:
-                UDP_IP = "127.0.0.1"
-                UDP_PORT = 5005
-                
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
-                sock.bind((UDP_IP, UDP_PORT))
-                    
-                while True:
-                    try:
-                        data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
-                        self.listener.message_queue.put(data) 
-                        break
-                    except Exception as e:
-                        self.listener._log_info(e)
-                        self.listener.message_queue.put(None)
-                        break
-  
-            except Exception as e:
-                self.exception = e
-                traceback.print_exc()       
+    """
+    Class to wait until a delay after (or before) a time specified by
+    a WRTD timing system message
+    """
 
     class StreamWriter(threading.Thread):
         def __init__(self, reader):
@@ -261,11 +239,13 @@ class ACA800(MDSplus.Device):
             self.tree_shot = device.tree.shot
             self.node_path = device.path
 
+
         def run(self):
             try:
                 import pypylon.pylon as pylon
                 from datetime import datetime, timezone
-
+                from ctypes import cdll, c_char_p, c_double, c_int
+                
                 self.tree = MDSplus.Tree(self.tree_name, self.tree_shot)
                 self.device = self.tree.getNode(self.node_path)
                 
@@ -274,7 +254,16 @@ class ACA800(MDSplus.Device):
                                 
                 self.time_to_record = int(self.device.RUNNING_TIME.data())  # seconds
                 self.frames_to_grab = int(self.device.FPS.data()) * self.time_to_record
-                
+
+
+                self.trigger_id = self.device.TRIGGER.TRIG_ID.data()
+                self.delay = self.device.TRIGGER.DELAY.data()
+
+                wrtdListen = cdll.LoadLibrary("libwrtdListen.so")
+                self.wrtdGetDTacqTime = wrtdListen.wrtdGetDTacqTime
+                self.wrtdGetDTacqTime.argtypes = [c_char_p, c_double, c_int]
+                self.wrtdGetDTacqTime.restype = c_double
+                                                
                 #######################################################################################################################
                 #Setting up and Configuring the camera using its IP address:
                 ip_address = self.device.ADDRESS.data()
@@ -298,26 +287,22 @@ class ACA800(MDSplus.Device):
                 self.cam.AcquisitionFrameRateEnable.SetValue(True)
                 self.cam.AcquisitionFrameRateAbs.SetValue(float(self.device.FPS.data()))
 
-                self.device._log_info(f'Start ListenUDP tread. Waiting for message...')
-                self.listen = self.device.ListenUDP(self)
-                self.listen.setDaemon(True)
-                self.listen.start()
-                self.listen.join() # Waiting for network trigger message
-    
+
                 #Triggering using SyncFreeRun timer: 
                 # https://docs.baslerweb.com/synchronous-free-run#converting-the-64-bit-timestamp-to-start-time-high-and-start-time-low
                 
+                timestamp = self.wrtdGetDTacqTime(self.trigger_id.encode(), float(self.delay), 1)
+                actionTime = int(timestamp * 1e9)
+
                 self.cam.GevTimestampControlLatch()
                 currentTimestamp = self.cam.GevTimestampValue()
                 self.device._log_info(f'Current Camera Timestamp is {currentTimestamp}')
-                
-                data = self.message_queue.get(block=True, timeout=1)
-                actionTime = currentTimestamp + int(int(data) * 1e9) # in nanosec
 
-                self.device._log_info(f'Received trigger message, with payload = {int(data)}')
+                if currentTimestamp >= actionTime:
+                    print("Trigger is in the past")
+                    
 
-                self.device.TRIGGER.IN_MESSAGE.record= int(data)
-                self.device.TRIGGER.TIMESTAMP.record = MDSplus.Int64(actionTime)
+                self.device._log_info(f'Received trigger message, with payload = {actionTime}')
 
                 self.cam.SyncFreeRunTimerStartTimeLow = (actionTime & 0x00000000FFFFFFFF)
                 self.cam.SyncFreeRunTimerStartTimeHigh = (actionTime & 0xFFFFFFFF00000000) >> 32
