@@ -295,7 +295,9 @@ class ACA800(MDSplus.Device):
                 self.device._log_info(f'Current Camera Timestamp is {currentTimestamp}')
 
                 if currentTimestamp >= actionTime:
-                    print("Warning: Trigger is in the past")
+                    print("Warning: Trigger is in the past. Exiting.")
+                    self.cam.Close()
+                    exit()
                     
                 #Triggering using SyncFreeRun timer: 
                 # https://docs.baslerweb.com/synchronous-free-run#converting-the-64-bit-timestamp-to-start-time-high-and-start-time-low
