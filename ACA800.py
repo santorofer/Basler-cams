@@ -250,11 +250,9 @@ class ACA800(MDSplus.Device):
                 self.device = self.tree.getNode(self.node_path)
                 
                 self.frame_queue = queue.Queue()
-                self.message_queue = queue.Queue()
                                 
                 self.time_to_record = int(self.device.RUNNING_TIME.data())  # seconds
                 self.frames_to_grab = int(self.device.FPS.data()) * self.time_to_record
-
 
                 self.trigger_id = self.device.TRIGGER.TRIG_ID.data()
                 self.delay = self.device.TRIGGER.DELAY.data()
@@ -286,23 +284,21 @@ class ACA800(MDSplus.Device):
                 #Set the FPS
                 self.cam.AcquisitionFrameRateEnable.SetValue(True)
                 self.cam.AcquisitionFrameRateAbs.SetValue(float(self.device.FPS.data()))
-
-
-                #Triggering using SyncFreeRun timer: 
-                # https://docs.baslerweb.com/synchronous-free-run#converting-the-64-bit-timestamp-to-start-time-high-and-start-time-low
                 
                 timestamp = self.wrtdGetDTacqTime(self.trigger_id.encode(), float(self.delay), 1)
                 actionTime = int(timestamp * 1e9)
+                
+                self.device._log_info(f'Received trigger message, with payload = {actionTime}')
 
                 self.cam.GevTimestampControlLatch()
                 currentTimestamp = self.cam.GevTimestampValue()
                 self.device._log_info(f'Current Camera Timestamp is {currentTimestamp}')
 
                 if currentTimestamp >= actionTime:
-                    print("Trigger is in the past")
+                    print("Warning: Trigger is in the past")
                     
-
-                self.device._log_info(f'Received trigger message, with payload = {actionTime}')
+                #Triggering using SyncFreeRun timer: 
+                # https://docs.baslerweb.com/synchronous-free-run#converting-the-64-bit-timestamp-to-start-time-high-and-start-time-low
 
                 self.cam.SyncFreeRunTimerStartTimeLow = (actionTime & 0x00000000FFFFFFFF)
                 self.cam.SyncFreeRunTimerStartTimeHigh = (actionTime & 0xFFFFFFFF00000000) >> 32
@@ -311,7 +307,7 @@ class ACA800(MDSplus.Device):
                 self.cam.SyncFreeRunTimerEnable = True
 
                 self.device._log_info(
-                    f"At {actionTime} (from incoming message), recording {self.time_to_record} second video at {self.device.FPS.data()} fps. Max #Images = {self.frames_to_grab}")
+                    f"Recording {self.time_to_record} second video at {self.device.FPS.data()} fps. Max #Images = {self.frames_to_grab}")
                 #######################################################################################################################
 
                 self.writer = self.device.StreamWriter(self)
