@@ -275,6 +275,16 @@ class ACA800(MDSplus.Device):
                 
                 self.device._log_info(f"Using device {self.cam.GetDeviceInfo().GetModelName()}")
                 
+                #Set Height and Width
+                
+                HEIGHT = self.device.HEIGHT.data()
+                WIDTH = self.device.WIDTH.data()
+
+                cam.Height =  HEIGHT
+                cam.Width = WIDTH
+
+                self.device._log_info((f'Cameras resolution set to height {HEIGHT} and width {WIDTH}'))
+
                 #Enable PTP for this camera
                 self.cam.GevIEEE1588 = True
                 
@@ -398,7 +408,7 @@ class ACA800(MDSplus.Device):
     def start_stream(self):
         self.RUNNING.on = True
         thread = self.StreamReader(self)
-        self.writer.setDaemon(True)
+        thread.setDaemon(True)
         thread.start()
 
     START_STREAM = start_stream
