@@ -280,8 +280,8 @@ class ACA800(MDSplus.Device):
                 HEIGHT = self.device.HEIGHT.data()
                 WIDTH = self.device.WIDTH.data()
 
-                cam.Height =  HEIGHT
-                cam.Width = WIDTH
+                self.cam.Height =  HEIGHT
+                self.cam.Width = WIDTH
 
                 self.device._log_info((f'Cameras resolution set to height {HEIGHT} and width {WIDTH}'))
 
@@ -408,8 +408,9 @@ class ACA800(MDSplus.Device):
     def start_stream(self):
         self.RUNNING.on = True
         thread = self.StreamReader(self)
-        thread.setDaemon(True)
+        #thread.setDaemon(True)
         thread.start()
+        thread.join()
 
     START_STREAM = start_stream
 
