@@ -309,7 +309,7 @@ class ACA800(MDSplus.Device):
                 self.cam.SyncFreeRunTimerEnable = True
 
                 self.device._log_info(
-                    f"Recording {self.time_to_record} second video at {self.device.FPS.data()} fps. Max #Images = {self.frames_to_grab}")
+                    f"It will be recording {self.time_to_record} second video at {self.device.FPS.data()} fps. Max #Images = {self.frames_to_grab}")
                 #######################################################################################################################
 
                 self.writer = self.device.StreamWriter(self)
@@ -363,10 +363,6 @@ class ACA800(MDSplus.Device):
 
             # This will signal the StreamWriter that no more buffers will be coming
             self.frame_queue.put(None)
-            
-            self.writer = self.device.StreamWriter(self)
-            self.writer.setDaemon(True)
-            self.writer.start()
             
             self.device.RUNNING.on = False
             self.cam.StopGrabbing()
