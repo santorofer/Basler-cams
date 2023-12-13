@@ -398,8 +398,8 @@ class ACA800(MDSplus.Device):
     def start_stream(self):
         self.RUNNING.on = True
         thread = self.StreamReader(self)
+        self.writer.setDaemon(True)
         thread.start()
-        thread.join()
 
     START_STREAM = start_stream
 
