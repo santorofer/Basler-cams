@@ -277,8 +277,8 @@ class ACA800(MDSplus.Device):
                 
                 #Set Height and Width
                 
-                HEIGHT = self.device.HEIGHT.data()
-                WIDTH = self.device.WIDTH.data()
+                HEIGHT = int(self.device.HEIGHT.data())
+                WIDTH = int(self.device.WIDTH.data())
 
                 self.cam.Height =  HEIGHT
                 self.cam.Width = WIDTH
@@ -410,6 +410,7 @@ class ACA800(MDSplus.Device):
         thread = self.StreamReader(self)
         thread.setDaemon(True)
         thread.start()
+        thread.join()
 
     START_STREAM = start_stream
 
