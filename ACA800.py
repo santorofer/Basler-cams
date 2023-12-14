@@ -200,6 +200,7 @@ class ACA800(MDSplus.Device):
              
                 frame_index = 0
                 while True:
+                    result = None
                     try:
                         result = self.reader.frame_queue.get(block=True, timeout=1)
                     except queue.Empty:
@@ -215,7 +216,7 @@ class ACA800(MDSplus.Device):
                     end = begin + delta_time
                     dim = MDSplus.Range(begin, end, delta_time)
 
-                    input_node.makeSegment(begin, end, dim, result.Array)
+                    input_node.makeSegment(begin, end, dim, np.array([result.Array]))
                     result.Release()
                     
                     benchmark_end = time.time()
