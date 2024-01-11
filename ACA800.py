@@ -455,8 +455,8 @@ class ACA800(MDSplus.Device):
     ###
     ### Streaming Methods
     ###
-
     def start_stream(self):
+        print("start_stream started")
         self.RUNNING.on = True
         thread = self.StreamReader(self)
         thread.setDaemon(True)
@@ -465,16 +465,25 @@ class ACA800(MDSplus.Device):
     
     START_STREAM = start_stream
 
+#    def fork_stream_thread(tree, shot, path, timeout):
+#        import os
+#        import subprocess
+#        print("fork_stream_thread")
+#        print(self)
+#        timeout = float(self.TIMEOUT)
+#        script = f"{os.path.realpath(os.path.dirname(__file__))}/stream-basler.sh"
+#        proc = subprocess.run([script, self.tree.name, str(self.tree.shot), self.path], capture_output=True, text=True, timeout=timeout)
+#        self.STDOUT.record = proc.stdout
+#        self.STDERR.record = proc.stderr
+#        if proc.returncode != 0:
+#            raise Exception(f"Failed to fork stream: {proc.stderr}")
+#        print("thread done")
+
     def fork_stream(self):
-        import os
-        import subprocess
-        timeout = float(self.TIMEOUT)
-        script = f"{os.path.realpath(os.path.dirname(__file__))}/stream-basler.sh"
-        proc = subprocess.run([script, self.tree.name, str(self.tree.shot), self.path], capture_output=True, text=True, timeout=timeout)
-        self.STDOUT.record = proc.stdout
-        self.STDERR.record = proc.stderr
-        if proc.returncode != 0:
-            raise Exception(f"Failed to fork stream: {proc.stderr}")
+        from fork_stream_thread import fork_stream_thread
+        import threading
+        thread = threading.Thread(target=fork_stream_thread, args=(self.tree.name, self.tree.shot, self.path, float(self.TIMEOUT.data())))
+        thread.start()
     FORK_STREAM = fork_stream
 
     def stop_stream(self):
