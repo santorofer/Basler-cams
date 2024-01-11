@@ -145,9 +145,47 @@ class ACA800(MDSplus.Device):
             # },
         },
         {
+            'path': ':STDOUT',
+            "type": "text",
+            "options": ("no_write_model","write_once"),
+            "help": "standard output of forked process",
+            # 'ext_options': {
+            #     'tooltip': 'Incoming message us to trigger. These options will contain the trigger timestamp, use to trigger the camera',
+            # },
+        },
+        {
+            'path': ':STDERR',
+            "type": "text",
+            "options": ("no_write_model","write_once"),
+            "help": "standard error of forked process",
+            # 'ext_options': {
+            #     'tooltip': 'Incoming message us to trigger. These options will contain the trigger timestamp, use to trigger the camera',
+            # },
+        },
+        {
+            'path': ':PID',
+            "type": "numeric",
+            "options": ("no_write_model","write_once"),
+            "help": "process id of forked process",
+            # 'ext_options': {
+            #     'tooltip': 'Incoming message us to trigger. These options will contain the trigger timestamp, use to trigger the camera',
+            # },
+        },
+        {
+            'path': ':TIMEOUT',
+            "type": "numeric",
+            "value" : 40,
+            "options": ("no_write_shot"),
+            "help": "timeout in seconds",
+            # 'ext_options': {
+            #     'tooltip': 'Incoming message us to trigger. These options will contain the trigger timestamp, use to trigger the camera',
+            # },
+        },
+
+        {
             'path': ':INIT_ACTION',
             'type': 'action',
-            'valueExpr': "Action(Dispatch('MDSIP_SERVER','INIT',50,None),Method(None,'INIT',head,'auto'))",
+            'valueExpr': "Action(Dispatch('MDSIP_SERVER','INIT',50,None),Method(None,'FORK_STREAM',head))",
             'options': ('no_write_shot',),
         },
         {
@@ -187,6 +225,7 @@ class ACA800(MDSplus.Device):
             self.reader = reader
 
         def run(self):
+            import sys
             try:
                 self.tree = MDSplus.Tree(self.tree_name, self.tree_shot)
                 self.device = self.tree.getNode(self.node_path)
@@ -216,8 +255,7 @@ class ACA800(MDSplus.Device):
                     end = begin + delta_time
                     dim = MDSplus.Range(begin, end, delta_time)
 
-                    input_node.makeSegment(begin, end, dim, np.array([result.Array]))
-                    result.Release()
+                    input_node.makeSegment(begin, end, dim, result)
                     
                     benchmark_end = time.time()
                     benchmark_elapsed = benchmark_end - benchmark_start
@@ -226,11 +264,11 @@ class ACA800(MDSplus.Device):
                     self.device._log_info(f"Finished writing frame {frame_index}/{self.reader.frames_to_grab}, took {benchmark_elapsed}s")
 
                     MDSplus.Event(event_name)
-
             except Exception as e:
                 self.exception = e
                 traceback.print_exc()
-
+            sys.exit()
+            return
 
     class StreamReader(threading.Thread):
         
@@ -242,6 +280,7 @@ class ACA800(MDSplus.Device):
 
 
         def run(self):
+            import sys
             try:
                 import pypylon.pylon as pylon
                 from datetime import datetime, timezone
@@ -341,12 +380,14 @@ class ACA800(MDSplus.Device):
                         grabResult = self.cam.RetrieveResult(0xFFFFFFFF, pylon.TimeoutHandling_ThrowException)
                         
                     except Exception as e:
+                        print('got an exception ', e, 'frame_index = ', frame_index)
                         self.device._log_info(e)
                         self.frame_queue.put(None) # signal the end of data acquisition
                         break
                     
                     if not grabResult:
-                        continue
+                        print('Did not get a result', e, 'frame_index = ', frame_index)
+                        break
                     
                     if grabResult.GrabSucceeded():
                         frame_index += 1
@@ -361,7 +402,11 @@ class ACA800(MDSplus.Device):
 
                         self.device._log_info(f"Timestamp {timestamp}")
                         
-                        self.frame_queue.put(grabResult)                        
+                        self.frame_queue.put(np.array([grabResult.Array]))
+                        grabResult.Release()
+                    else:
+                        print('The GRAB Failed', frame_index)
+                        break
                             
                 # else:
                 #     pass
@@ -376,16 +421,22 @@ class ACA800(MDSplus.Device):
             
             self.device.RUNNING.on = False
             self.cam.StopGrabbing()
+            self.cam.DestroyDevice()
             self.cam.Close()
-            
+            del(self.cam)
+            del(tlFactory)
+            del(pylon)
+            self.writer.join()
+            self.writer = None
+            sys.exit()
             # Wait for the StreamWriter to finish
-            try:
-                while self.writer.is_alive():
-                    pass
-            finally:
-                self.writer.join()
-                if hasattr(self.writer, "exception"):
-                    self.exception = self.writer.exception
+            #try:
+            #    while self.writer.is_alive():
+            #        pass
+            #finally:
+            #    self.writer.join()
+            #    if hasattr(self.writer, "exception"):
+            #        self.exception = self.writer.exception
    
     
     #Helper Methods
@@ -410,8 +461,21 @@ class ACA800(MDSplus.Device):
         thread = self.StreamReader(self)
         thread.setDaemon(True)
         thread.start()
-
+        thread.join()
+    
     START_STREAM = start_stream
+
+    def fork_stream(self):
+        import os
+        import subprocess
+        timeout = float(self.TIMEOUT)
+        script = f"{os.path.realpath(os.path.dirname(__file__))}/stream-basler.sh"
+        proc = subprocess.run([script, self.tree.name, str(self.tree.shot), self.path], capture_output=True, text=True, timeout=timeout)
+        self.STDOUT.record = proc.stdout
+        self.STDERR.record = proc.stderr
+        if proc.returncode != 0:
+            raise Exception(f"Failed to fork stream: {proc.stderr}")
+    FORK_STREAM = fork_stream
 
     def stop_stream(self):
         self.RUNNING.on = False
