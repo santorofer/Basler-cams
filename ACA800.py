@@ -69,20 +69,20 @@ class ACA800(MDSplus.Device):
         {
             'path': ':HEIGHT',
             'type': 'numeric',
-            'value': 640,
+            'value': 632,
             'options': ('no_write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'Default image width, which can be overridden per-input.',
+            #     'tooltip': 'Default Max image HEIGHT taken from calling cam.HeightMax(), which can be overridden per-input.',
             #     'min': 1,
             # },
         },
         {
             'path': ':WIDTH',
             'type': 'numeric',
-            'value': 600,
+            'value': 832,
             'options': ('no_write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'Default image width, which can be overridden per-input.',
+            #     'tooltip': 'Default Max image WIDTH taken from calling cam.WidthMax(), which can be overridden per-input.',
             #     'min': 1,
             # },
         },
@@ -92,7 +92,7 @@ class ACA800(MDSplus.Device):
             'value': 10,
             'options': ('no_write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'Default image width, which can be overridden per-input.',
+            #     'tooltip': 'Default runtime, which can be overridden per-input.',
             #     'min': 1,
             # },
         }, 
