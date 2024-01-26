@@ -226,7 +226,6 @@ class ACA800(MDSplus.Device):
             self.reader = reader
 
         def run(self):
-            import sys
             try:
                 self.tree = MDSplus.Tree(self.tree_name, self.tree_shot)
                 self.device = self.tree.getNode(self.node_path)
@@ -281,7 +280,6 @@ class ACA800(MDSplus.Device):
 
 
         def run(self):
-            import sys
             try:
                 import pypylon.pylon as pylon
                 from datetime import datetime, timezone
