@@ -4,6 +4,7 @@ import numpy as np
 import threading
 import time
 import queue
+import sys
 
 class ACA800(MDSplus.Device):
     '''
@@ -465,38 +466,29 @@ class ACA800(MDSplus.Device):
     
     START_STREAM = start_stream
 
-#    def fork_stream_thread(tree, shot, path, timeout):
-#        import os
-#        import subprocess
-#        print("fork_stream_thread")
-#        print(self)
-#        timeout = float(self.TIMEOUT)
-#        script = f"{os.path.realpath(os.path.dirname(__file__))}/stream-basler.sh"
-#        proc = subprocess.run([script, self.tree.name, str(self.tree.shot), self.path], capture_output=True, text=True, timeout=timeout)
-#        self.STDOUT.record = proc.stdout
-#        self.STDERR.record = proc.stderr
-#        if proc.returncode != 0:
-#            raise Exception(f"Failed to fork stream: {proc.stderr}")
-#        print("thread done")
-
     def fork_stream(self):
         def fork_stream_thread(tree, shot, path, timeout):
             from MDSplus import Tree
             import os
             import subprocess
             print("fork_stream_thread")
-            script = f"{os.path.realpath(os.path.dirname(__file__))}/stream-basler.sh"
-            proc = subprocess.run([script, tree, str(shot), path], capture_output=True, text=True, timeout=timeout)
+
+            v = sys.version_info
+            python_executable = f"/usr/bin/python{v.major}.{v.minor}"
+            script = f"{os.path.realpath(os.path.dirname(__file__))}/stream-basler.py"
+            
+            proc = subprocess.run([python_executable, script, tree, str(shot), path], capture_output=True, text=True, timeout=timeout)
+
             t = Tree(tree,shot)
             d = t.getNode(path)
             d.STDOUT.record = proc.stdout
             d.STDERR.record = proc.stderr
+
+            # This is not working (though stderr and stdout are saved in nodes in the tree correctly):
             if proc.returncode != 0:
                 raise Exception(f"Failed to fork stream: {proc.stderr}")
             print("thread done")
 
-
-#        from fork_stream_thread import fork_stream_thread
         import threading
         thread = threading.Thread(target=fork_stream_thread, args=(self.tree.name, self.tree.shot, self.path, float(self.TIMEOUT.data())))
         thread.setDaemon(True)
