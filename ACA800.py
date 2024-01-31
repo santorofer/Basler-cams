@@ -70,7 +70,7 @@ class ACA800(MDSplus.Device):
             'path': ':OFFSETX',
             'type': 'numeric',
             'value': 0,
-            'options': ('no_write_shot',),
+            'options': ('write_shot',),
             # 'ext_options': {
             #     'tooltip': 'Configured image OffsetX. OffsetX + Width ≤ WidthMax',
             #     'min': 1,
@@ -80,7 +80,7 @@ class ACA800(MDSplus.Device):
             'path': ':OFFSETY',
             'type': 'numeric',
             'value': 0,
-            'options': ('no_write_shot',),
+            'options': ('write_shot',),
             # 'ext_options': {
             #     'tooltip': 'Configured image OffsetY. OffsetY + Height ≤ HeightMax',
             #     'min': 1,
@@ -110,7 +110,7 @@ class ACA800(MDSplus.Device):
             'path': ':WIDTH_ACT',
             'type': 'numeric',
             'value': 800,
-            'options': ('no_write_shot',),
+            'options': ('write_shot',),
             # 'ext_options': {
             #     'tooltip': 'Actual image WIDTH. This is because WIDTH needs to be a factor of 16',
             #     'min': 1,
@@ -347,30 +347,31 @@ class ACA800(MDSplus.Device):
                 heightmax = self.cam.HeightMax()
                 
                 #Set Height and Width         
-                HEIGHT = int(self.device.HEIGHT_CONF.data())
-                WIDTH = int(self.device.WIDTH_CONF.data())
+                height = int(self.device.HEIGHT_CONF.data())
+                width = int(self.device.WIDTH_CONF.data())
 
                 # Basler wants WIDTH be a factor of 16 (minum dimensions for an image are 16W x 1H)
-                if (WIDTH % 16) == 0:                    
-                    self.cam.Width = WIDTH
-                else:
-                    WIDTH = round(WIDTH)                    
-            
-                self.cam.Width = WIDTH
-                self.cam.Height =  HEIGHT
-                self.device.WIDTH_ACT.record = WIDTH
+                # w = int((width - 16)/16), so that:
+                if (width % 16) != 0:
+                    q = int(width/16) - 1
+                    width = q * 16        
+                             
+                self.cam.Width = width
+                self.cam.Height =  height
+                self.device.WIDTH_ACT.record = width
 
-                self.device._log_info((f'Cameras resolution set to height {HEIGHT} and actual width {WIDTH}'))
+                self.device._log_info((f'Cameras resolution set to height {height} and actual width {width}'))
 
-                #Set Offsets: OffsetX and OffsetY, with the following condition:               
+                #Set Offsets: OffsetX and OffsetY, with the following condition:  
+                #See: https://docs.baslerweb.com/image-roi             
                 OFFSETX = int(self.device.OFFSETX.data())
                 OFFSETY = int(self.device.OFFSETY.data())
                 
-                if (OFFSETX + WIDTH) > widthmax:
+                if (OFFSETX + width) > widthmax:
                     self.device._log_info((f'Warnning: OffsetX + Width > WidthMax. Actual OffsetX set to 0.'))
                     self.cam.OffsetX = 0
                
-                if (OFFSETY + HEIGHT) > heightmax:
+                if (OFFSETY + width) > heightmax:
                     self.device._log_info((f'Warnning: OffsetX + Height > HeightMax. Actual OffsetY set to 0.'))                    
                     self.cam.OffsetY = 0    
                     
