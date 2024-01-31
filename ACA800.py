@@ -371,7 +371,7 @@ class ACA800(MDSplus.Device):
                     self.device._log_info((f'Warnning: OffsetX + Width > WidthMax. Actual OffsetX set to 0.'))
                     self.cam.OffsetX = 0
                
-                if (OFFSETY + width) > heightmax:
+                if (OFFSETY + height) > heightmax:
                     self.device._log_info((f'Warnning: OffsetX + Height > HeightMax. Actual OffsetY set to 0.'))                    
                     self.cam.OffsetY = 0    
                     
