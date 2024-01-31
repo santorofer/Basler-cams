@@ -65,24 +65,54 @@ class ACA800(MDSplus.Device):
             # 'ext_options': {
             #     'tooltip': 'Frame Sample FPS in Hertz.',
             # },
-        },       
+        },
         {
-            'path': ':HEIGHT',
+            'path': ':OFFSETX',
             'type': 'numeric',
-            'value': 632,
+            'value': 0,
             'options': ('no_write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'Default Max image HEIGHT taken from calling cam.HeightMax(), which can be overridden per-input.',
+            #     'tooltip': 'Configured image OffsetX. OffsetX + Width ≤ WidthMax',
             #     'min': 1,
             # },
         },
         {
-            'path': ':WIDTH',
+            'path': ':OFFSETY',
             'type': 'numeric',
-            'value': 832,
+            'value': 0,
             'options': ('no_write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'Default Max image WIDTH taken from calling cam.WidthMax(), which can be overridden per-input.',
+            #     'tooltip': 'Configured image OffsetY. OffsetY + Height ≤ HeightMax',
+            #     'min': 1,
+            # },
+        },    
+        {
+            'path': ':HEIGHT_CONF',
+            'type': 'numeric',
+            'value': 600,
+            'options': ('no_write_shot',),
+            # 'ext_options': {
+            #     'tooltip': 'Configured image HEIGHT. Max=632, Min=1',
+            #     'min': 1,
+            # },
+        },
+        {
+            'path': ':WIDTH_CONF',
+            'type': 'numeric',
+            'value': 800,
+            'options': ('no_write_shot',),
+            # 'ext_options': {
+            #     'tooltip': 'Configured image WIDTH. Max=832, Min=16.',
+            #     'min': 1,
+            # },
+        },
+        {
+            'path': ':WIDTH_ACT',
+            'type': 'numeric',
+            'value': 800,
+            'options': ('no_write_shot',),
+            # 'ext_options': {
+            #     'tooltip': 'Actual image WIDTH. This is because WIDTH needs to be a factor of 16',
             #     'min': 1,
             # },
         },
@@ -301,7 +331,6 @@ class ACA800(MDSplus.Device):
                 self.wrtdGetDTacqTime.argtypes = [c_char_p, c_double, c_int]
                 self.wrtdGetDTacqTime.restype = c_double
                                                 
-                #######################################################################################################################
                 #Setting up and Configuring the camera using its IP address:
                 ip_address = self.device.ADDRESS.data()
                 info = pylon.DeviceInfo()
@@ -314,15 +343,37 @@ class ACA800(MDSplus.Device):
                 
                 self.device._log_info(f"Using device {self.cam.GetDeviceInfo().GetModelName()}")
                 
-                #Set Height and Width               
-                HEIGHT = int(self.device.HEIGHT.data())
-                WIDTH = int(self.device.WIDTH.data())
+                widthmax = self.cam.WidthMax()
+                heightmax = self.cam.HeightMax()
+                
+                #Set Height and Width         
+                HEIGHT = int(self.device.HEIGHT_CONF.data())
+                WIDTH = int(self.device.WIDTH_CONF.data())
 
-                self.cam.Height =  HEIGHT
+                # Basler wants WIDTH be a factor of 16 (minum dimensions for an image are 16W x 1H)
+                if (WIDTH % 16) == 0:                    
+                    self.cam.Width = WIDTH
+                else:
+                    WIDTH = round(WIDTH)                    
+            
                 self.cam.Width = WIDTH
+                self.cam.Height =  HEIGHT
+                self.device.WIDTH_ACT.record = WIDTH
 
-                self.device._log_info((f'Cameras resolution set to height {HEIGHT} and width {WIDTH}'))
+                self.device._log_info((f'Cameras resolution set to height {HEIGHT} and actual width {WIDTH}'))
 
+                #Set Offsets: OffsetX and OffsetY, with the following condition:               
+                OFFSETX = int(self.device.OFFSETX.data())
+                OFFSETY = int(self.device.OFFSETY.data())
+                
+                if (OFFSETX + WIDTH) > widthmax:
+                    self.device._log_info((f'Warnning: OffsetX + Width > WidthMax. Actual OffsetX set to 0.'))
+                    self.cam.OffsetX = 0
+               
+                if (OFFSETY + HEIGHT) > heightmax:
+                    self.device._log_info((f'Warnning: OffsetX + Height > HeightMax. Actual OffsetY set to 0.'))                    
+                    self.cam.OffsetY = 0    
+                    
                 #Enable PTP for this camera
                 self.cam.GevIEEE1588 = True
                 
@@ -358,7 +409,6 @@ class ACA800(MDSplus.Device):
 
                 self.device._log_info(
                     f"It will be recording {self.time_to_record} second video at {self.device.FPS.data()} fps. Max #Images = {self.frames_to_grab}")
-                #######################################################################################################################
 
                 self.writer = self.device.StreamWriter(self)
                 self.writer.setDaemon(True)
@@ -419,15 +469,19 @@ class ACA800(MDSplus.Device):
             self.frame_queue.put(None)
             
             self.device.RUNNING.on = False
+            
             self.cam.StopGrabbing()
             self.cam.DestroyDevice()
             self.cam.Close()
+            
             del(self.cam)
             del(tlFactory)
             del(pylon)
+            
             self.writer.join()
             self.writer = None
             sys.exit()
+            
             # Wait for the StreamWriter to finish
             #try:
             #    while self.writer.is_alive():
