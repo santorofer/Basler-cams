@@ -67,27 +67,55 @@ class ACA800(MDSplus.Device):
             # },
         },
         {
-            'path': ':OFFSETX',
+            'path': ':OFFSETS',
+            'type': 'any',
+        },
+        {
+            'path': ':OFFSETS:X_CONFIG',
             'type': 'numeric',
             'value': 0,
-            'options': ('write_shot',),
+            'options': ('no_write_shot',),
             # 'ext_options': {
             #     'tooltip': 'Configured image OffsetX. OffsetX + Width ≤ WidthMax',
             #     'min': 1,
             # },
         },
         {
-            'path': ':OFFSETY',
+            'path': ':OFFSETS:X_ACTUAL',
             'type': 'numeric',
             'value': 0,
             'options': ('write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'Configured image OffsetY. OffsetY + Height ≤ HeightMax',
+            #     'tooltip': 'Actual image OffsetX. OffsetX + Width ≤ WidthMax',
             #     'min': 1,
             # },
+        },
+        {
+            'path': ':OFFSETS:Y_CONFIG',
+            'type': 'numeric',
+            'value': 0,
+            'options': ('no_write_shot',),
+            # 'ext_options': {
+            #     'tooltip': 'Configured image OffsetX. OffsetX + Width ≤ WidthMax',
+            #     'min': 1,
+            # },
+        },
+        {
+            'path': ':OFFSETS:Y_ACTUAL',
+            'type': 'numeric',
+            'value': 0,
+            'options': ('write_shot',),
+            # 'ext_options': {
+            #     'tooltip': 'Actual image OffsetX. OffsetX + Width ≤ WidthMax',
+            #     'min': 1,
+            # },
+        },
+        {
+            'path': ':DIMENSIONS',
+            'type': 'any',
         },    
         {
-            'path': ':HEIGHT_CONF',
+            'path': ':DIMENSIONS:HEIGHT_CONF',
             'type': 'numeric',
             'value': 600,
             'options': ('no_write_shot',),
@@ -97,7 +125,7 @@ class ACA800(MDSplus.Device):
             # },
         },
         {
-            'path': ':WIDTH_CONF',
+            'path': ':DIMENSIONS:WIDTH_CONF',
             'type': 'numeric',
             'value': 800,
             'options': ('no_write_shot',),
@@ -107,7 +135,7 @@ class ACA800(MDSplus.Device):
             # },
         },
         {
-            'path': ':WIDTH_ACT',
+            'path': ':DIMENSIONS:WIDTH_ACT',
             'type': 'numeric',
             'value': 800,
             'options': ('write_shot',),
@@ -347,8 +375,8 @@ class ACA800(MDSplus.Device):
                 heightmax = self.cam.HeightMax()
                 
                 #Set Height and Width         
-                height = int(self.device.HEIGHT_CONF.data())
-                width = int(self.device.WIDTH_CONF.data())
+                height = int(self.device.DIMENSIONS.HEIGHT_CONF.data())
+                width = int(self.device.DIMENSIONS.WIDTH_CONF.data())
 
                 # Basler wants WIDTH be a factor of 16 (minum dimensions for an image are 16W x 1H)
                 # w = int((width - 16)/16), so that:
@@ -358,22 +386,26 @@ class ACA800(MDSplus.Device):
                              
                 self.cam.Width = width
                 self.cam.Height =  height
-                self.device.WIDTH_ACT.record = width
+                self.device.DIMENSIONS.WIDTH_ACT.record = width
 
                 self.device._log_info((f'Cameras resolution set to height {height} and actual width {width}'))
 
                 #Set Offsets: OffsetX and OffsetY, with the following condition:  
                 #See: https://docs.baslerweb.com/image-roi             
-                OFFSETX = int(self.device.OFFSETX.data())
-                OFFSETY = int(self.device.OFFSETY.data())
+                OFFSETX = int(self.device.OFFSETS.X_CONFIG.data())
+                OFFSETY = int(self.device.OFFSETS.Y_CONFIG.data())
                 
                 if (OFFSETX + width) > widthmax:
-                    self.device._log_info((f'Warnning: OffsetX + Width > WidthMax. Actual OffsetX set to 0.'))
-                    self.cam.OffsetX = 0
-               
+                    OFFSETX = widthmax - width
+                    self.device._log_info((f'Warnning: OffsetX + Width > WidthMax. Actual OffsetX set to WidthMax - Width: {OFFSETX}.'))
+                self.device.OFFSETS.X_ACTUAL.record = OFFSETX
+                self.cam.OffsetX = OFFSETX
+                                   
                 if (OFFSETY + height) > heightmax:
-                    self.device._log_info((f'Warnning: OffsetX + Height > HeightMax. Actual OffsetY set to 0.'))                    
-                    self.cam.OffsetY = 0    
+                    OFFSETY = heightmax - height
+                    self.device._log_info((f'Warnning: OffsetY + Height > HeightMax. Actual OffsetY set to HeightMax - Height: {OFFSETY}'))
+                self.device.OFFSETS.Y_ACTUAL.record = OFFSETY
+                self.cam.OffsetX = OFFSETY
                     
                 #Enable PTP for this camera
                 self.cam.GevIEEE1588 = True
