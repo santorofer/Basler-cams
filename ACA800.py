@@ -560,7 +560,7 @@ class ACA800(MDSplus.Device):
 
             v = sys.version_info
             python_executable = f"/usr/bin/python{v.major}.{v.minor}"
-            script = f"{os.path.realpath(os.path.dirname(__file__))}/stream-basler.py"
+            script = f"{os.path.realpath(os.path.dirname(__file__))}/_stream-basler.py"
             
             proc = subprocess.run([python_executable, script, tree, str(shot), path], capture_output=True, text=True, timeout=timeout)
 
