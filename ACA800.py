@@ -18,15 +18,6 @@ class ACA800(MDSplus.Device):
             'options': ('no_write_shot',),
         },
         {
-            'path': ':MODE',
-            'type': 'text',
-            'options': ('no_write_shot',),
-            # 'ext_options': {
-            #     'tooltip': 'The intended mode of operation.',
-            #     #'values': _MODE_OPTIONS,
-            # },
-        },
-        {
             'path': ':ADDRESS',
             'type': 'text',
             'options': ('no_write_shot',),
@@ -66,6 +57,26 @@ class ACA800(MDSplus.Device):
             #     'tooltip': 'Frame Sample FPS in Hertz.',
             # },
         },
+        {
+            'path': ':EXPOSURE',
+            'type': 'numeric',
+            'value': 21110.0,
+            'options': ('no_write_shot',),
+            # 'ext_options': {
+            #     'tooltip': 'Exposure in microseconds.',
+            #     #'values': _MODE_OPTIONS,
+            # },
+        },
+        {
+            'path': ':GAIN_RAW',
+            'type': 'numeric',
+            'value': 136,
+            'options': ('no_write_shot',),
+            # 'ext_options': {
+            #     'tooltip': 'GainRaw. Gain = 20 * log10 (GainRaw / 136)',
+            #     #'values': _MODE_OPTIONS,
+            # },
+        },        
         {
             'path': ':OFFSETS',
             'type': 'any',
@@ -406,7 +417,18 @@ class ACA800(MDSplus.Device):
                     self.device._log_info((f'Warnning: OffsetY + Height > HeightMax. Actual OffsetY set to HeightMax - Height: {OFFSETY}'))
                 self.device.OFFSETS.Y_ACTUAL.record = OFFSETY
                 self.cam.OffsetX = OFFSETY
-                    
+                
+                # Exposure Time parameter to the desired exposure time in microseconds.
+                # First we need to be sure that the following two parameters are set correctly:
+                self.cam.ExposureMode.Value = 'Timed'
+                self.cam.ExposureAuto.Value = 'Off'
+                self.cam.ExposureTimeAbs.Value = float(self.device.EXPOSURE.data())
+                
+                # Gain
+                # First we need to be sure that:
+                self.cam.GainAuto.Value = 'Off'
+                self.cam.GainRaw.Value = int(self.device.GAIN_RAW.data())
+                
                 #Enable PTP for this camera
                 self.cam.GevIEEE1588 = True
                 
@@ -560,7 +582,7 @@ class ACA800(MDSplus.Device):
 
             v = sys.version_info
             python_executable = f"/usr/bin/python{v.major}.{v.minor}"
-            script = f"{os.path.realpath(os.path.dirname(__file__))}/stream-basler.py"
+            script = f"{os.path.realpath(os.path.dirname(__file__))}/_stream-basler.py"
             
             proc = subprocess.run([python_executable, script, tree, str(shot), path], capture_output=True, text=True, timeout=timeout)
 

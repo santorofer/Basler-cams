@@ -5,14 +5,18 @@ import matplotlib.cm as cm
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-
+import numpy as np
 
 shot_number = int(sys.argv[1])
 tree = MDSplus.Tree('basler', shot_number)
 
-input = tree.ACA800.FRAMES
+input = tree.BASLER_A.FRAMES
 images = [ input.getSegment(i).data() for i in range(input.getNumSegments()) ]
-print(f"Number of frames = {len(images)}, Running time = {tree.ACA800.RUNNING_TIME.data()}")
+print(f"Number of frames = {len(images)}, Running time = {tree.BASLER_A.RUNNING_TIME.data()}")
+npimages = np.array(images)
+squeezed_images = np.squeeze(npimages)
+
+print(npimages.shape, squeezed_images.shape)
 
 #frames = []
 #fig = plt.figure("Animation")
@@ -20,7 +24,7 @@ fig, ax = plt.subplots()
 
 frames_text = []
 for i in range(input.getNumSegments()):
-    frames = ax.imshow(images[i], cmap=cm.Greys_r,animated=True)
+    frames = ax.imshow(squeezed_images[i], cmap=cm.Greys_r,animated=True)
     text   = ax.text(x=400, y=450, s=i, color='r', fontsize=14, fontweight='bold') # add text
     
     frames_text.append([frames, text]) # add frames and text
