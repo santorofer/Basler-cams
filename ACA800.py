@@ -63,7 +63,7 @@ class ACA800(MDSplus.Device):
             'value': 21110.0,
             'options': ('no_write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'Exposure in microseconds.',
+            #     'tooltip': 'Exposure in microseconds. Min: 80, Max: 10000000.',
             #     #'values': _MODE_OPTIONS,
             # },
         },
@@ -73,7 +73,7 @@ class ACA800(MDSplus.Device):
             'value': 136,
             'options': ('no_write_shot',),
             # 'ext_options': {
-            #     'tooltip': 'GainRaw. Gain = 20 * log10 (GainRaw / 136)',
+            #     'tooltip': 'GainRaw. Gain = 20 * log10 (GainRaw / 136). Min: 136, Max: 542',
             #     #'values': _MODE_OPTIONS,
             # },
         },        
